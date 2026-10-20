@@ -1,43 +1,134 @@
 ; ═════════════════════════════════════════════════════════════════
 ; Proxy Switcher — 纯汇编实现 (MASM x64)
-; 功能: 系统托盘 + 右键菜单 + 切换代理 + 开机启动
+; 无外部依赖，内联所有结构体和常量
+; 功能: 系统托盘 + 右键菜单 + 切换代理 + 开机启动 + 全局热键
 ; ═════════════════════════════════════════════════════════════════
 
-include \masm64\include\windows.inc
-include \masm64\include\shellapi.inc
-include \masm64\include\user32.inc
-include \masm64\include\kernel32.inc
-include \masm64\include\advapi32.inc
-include \masm64\include\wininet.inc
-include \masm64\macros\macros.inc
+; ── 结构体定义 ──
+POINT struct
+    x DWORD ?
+    y DWORD ?
+POINT ends
 
-includelib \masm64\lib\user32.lib
-includelib \masm64\lib\kernel32.lib
-includelib \masm64\lib\shell32.lib
-includelib \masm64\lib\advapi32.lib
-includelib \masm64\lib\wininet.lib
+RECT struct
+    left DWORD ?
+    top DWORD ?
+    right DWORD ?
+    bottom DWORD ?
+RECT ends
 
-; ── 常量 ──
-WM_TRAYICON        equ 104h
-IDI_APP             equ 100
-IDM_PROXY_ON        equ 2001
-IDM_PROXY_OFF       equ 2002
-IDM_PROXY_TOGGLE    equ 2003
-IDM_AUTOSTART       equ 2004
-IDM_EXIT            equ 2005
+WNDCLASSEX struct
+    cbSize DWORD ?
+    style DWORD ?
+    lpfnWndProc QWORD ?
+    cbClsExtra DWORD ?
+    cbWndExtra DWORD ?
+    hInstance QWORD ?
+    hIcon QWORD ?
+    hCursor QWORD ?
+    hbrBackground QWORD ?
+    lpszMenuName QWORD ?
+    lpszClassName QWORD ?
+    hIconSm QWORD ?
+WNDCLASSEX ends
+
+MSG struct
+    hwnd QWORD ?
+    message DWORD ?
+    wParam QWORD ?
+    lParam QWORD ?
+    time DWORD ?
+    pt POINT <>
+MSG ends
+
+NOTIFYICONDATA struct
+    cbSize DWORD ?
+    hwnd QWORD ?
+    uID DWORD ?
+    uFlags DWORD ?
+    uCallbackMessage DWORD ?
+    hIcon QWORD ?
+    szTip BYTE 128 dup(?)
+    dwState DWORD ?
+    dwStateMask DWORD ?
+    szInfo BYTE 256 dup(?)
+    uVersion DWORD ?
+    szInfoTitle BYTE 64 dup(?)
+    dwInfoFlags DWORD ?
+    guidItem GUID <>
+    hBalloonIcon QWORD ?
+NOTIFYICONDATA ends
+
+; ── 常量定义 ──
+; Window
+CS_HREDRAW        equ 0002h
+CS_VREDRAW        equ 0001h
+WS_OVERLAPPEDWINDOW equ 00CF0000h
+SW_SHOWNORMAL     equ 1
+COLOR_WINDOW      equ 5
+IDC_ARROW         equ 32512
+
+; Messages
+WM_DESTROY        equ 0002h
+WM_COMMAND        equ 0111h
+WM_RBUTTONUP      equ 0205h
+WM_LBUTTONDBLCLK  equ 0203h
+WM_HOTKEY         equ 0312h
+
+; NotifyIcon
+NIM_ADD           equ 00000000h
+NIM_MODIFY        equ 00000001h
+NIM_DELETE        equ 00000002h
+NIF_ICON          equ 00000002h
+NIF_MESSAGE       equ 00000001h
+NIF_TIP           equ 00000004h
+NIF_INFO          equ 00000010h
+
+; Menu
+MF_STRING         equ 00000000h
+MF_SEPARATOR      equ 00000800h
+MF_CHECKED        equ 00000008h
+MF_UNCHECKED      equ 00000000h
+TPM_LEFTALIGN     equ 00000000h
+TPM_RIGHTBUTTON   equ 00000002h
+
+; Hotkey
+MOD_CONTROL       equ 0002h
+MOD_SHIFT         equ 0004h
+
+; Registry
+HKEY_CURRENT_USER equ 80000001h
+KEY_READ          equ 00020019h
+KEY_SET_VALUE     equ 00000002h
+REG_DWORD         equ 00000004h
+REG_SZ            equ 00000001h
+ERROR_SUCCESS     equ 0
+
+; Internet Options
+INTERNET_OPTION_SETTINGS_CHANGED equ 39
+INTERNET_OPTION_REFRESH          equ 37
+
+; IDs
+IDI_APP           equ 100
+WM_TRAYICON       equ 0400h + 4
+IDM_PROXY_ON      equ 2001
+IDM_PROXY_OFF     equ 2002
+IDM_PROXY_TOGGLE  equ 2003
+IDM_AUTOSTART     equ 2004
+IDM_EXIT          equ 2005
 
 ; ── 数据段 ──
 .data
 className       db "ProxySwitcherWnd", 0
-appName        db "Proxy Switcher", 0
+appName         db "Proxy Switcher", 0
 regPath         db "Software\Microsoft\Windows\CurrentVersion\Internet Settings", 0
-regAutoRun     db "Software\Microsoft\Windows\CurrentVersion\Run", 0
-regValueEnable db "ProxyEnable", 0
-regValueServer db "ProxyServer", 0
+regAutoRun      db "Software\Microsoft\Windows\CurrentVersion\Run", 0
+regValueEnable  db "ProxyEnable", 0
+regValueServer  db "ProxyServer", 0
 regValueOverride db "ProxyOverride", 0
-autoRunName    db "ProxySwitcher", 0
-proxyServer    db "127.0.0.1:7890", 0
-proxyOverride  db "<local>", 0
+autoRunName     db "ProxySwitcher", 0
+proxyServer     db "127.0.0.1:7890", 0
+proxyOverride   db "<local>", 0
 
 wcex            WNDCLASSEX <>
 msg             MSG <>
@@ -52,9 +143,9 @@ cs              WNDCLASSEX <>
 ; ── 代码段 ──
 .code
 
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ; WinMain
-; ════════════════════════════════════════════════════════════════
+; ═══════════════════════════════════════════════════════════════════
 WinMain proc
 
     ; 获取模块句柄
@@ -89,6 +180,13 @@ WinMain proc
     invoke CreatePopupMenu
     mov hPopup, rax
 
+    ; 初始化托盘图标
+    invoke InitTrayIcon
+
+    ; 注册全局热键 Ctrl+Shift+P
+    invoke RegisterHotKey, hWndMain, IDM_PROXY_TOGGLE, \
+        MOD_CONTROL or MOD_SHIFT, 'P'
+
     ; 消息循环
     msg_loop:
     invoke GetMessage, ADDR msg, 0, 0, 0
@@ -99,17 +197,29 @@ WinMain proc
     jmp msg_loop
 
     exit_loop:
-    mov rax, msg.wParam
+    ; 清理
+    invoke UnregisterHotKey, hWndMain, IDM_PROXY_TOGGLE
+    invoke ExitProcess, msg.wParam
     ret
 
 WinMain endp
 
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ; WndProc — 窗口过程
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
 
+    ; ── 热键消息 ──
+    cmp uMsg, WM_HOTKEY
+    jne check_tray
+        ; wParam = hotkey ID
+        cmp wParam, IDM_PROXY_TOGGLE
+        jne defproc
+            invoke ToggleProxy
+            jmp defproc
+
     ; ── 托盘消息 ──
+    check_tray:
     cmp uMsg, WM_TRAYICON
     jne check_destroy
 
@@ -182,9 +292,9 @@ WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
 
 WndProc endp
 
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ; SetProxy — 设置系统代理 (0=关, 1=开)
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 SetProxy proc uses rbx rsi rdi enabled:DWORD
     local hKey:qword
     local dwValue:DWORD
@@ -228,9 +338,9 @@ SetProxy proc uses rbx rsi rdi enabled:DWORD
 
 SetProxy endp
 
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ; ToggleProxy — 切换代理开关
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ToggleProxy proc
     local currentEnabled:DWORD
 
@@ -242,9 +352,9 @@ ToggleProxy proc
 
 ToggleProxy endp
 
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ; GetProxyEnabled — 读取当前代理状态 (返回 0 或 1)
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 GetProxyEnabled proc
     local hKey:qword
     local dwValue:DWORD
@@ -270,9 +380,9 @@ GetProxyEnabled proc
 
 GetProxyEnabled endp
 
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ; UpdateMenuChecks — 更新菜单勾选
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 UpdateMenuChecks proc
     local enabled:DWORD
 
@@ -312,9 +422,9 @@ UpdateMenuChecks proc
 
 UpdateMenuChecks endp
 
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ; ToggleAutoStart — 切换开机启动
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ToggleAutoStart proc
     invoke IsAutoStartEnabled
     test eax, eax
@@ -334,9 +444,9 @@ ToggleAutoStart proc
 
 ToggleAutoStart endp
 
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ; AddAutoStart — 添加开机启动注册表项
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 AddAutoStart proc
     local hKey:qword
     local exePath[MAX_PATH]:BYTE
@@ -363,9 +473,9 @@ AddAutoStart proc
 
 AddAutoStart endp
 
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ; RemoveAutoStart — 删除开机启动注册表项
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 RemoveAutoStart proc
     local hKey:qword
 
@@ -386,9 +496,9 @@ RemoveAutoStart proc
 
 RemoveAutoStart endp
 
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ; IsAutoStartEnabled — 检查是否已设置开机启动
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 IsAutoStartEnabled proc
     local hKey:qword
 
@@ -414,9 +524,9 @@ IsAutoStartEnabled proc
 
 IsAutoStartEnabled endp
 
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ; InitTrayIcon — 初始化系统托盘图标
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 InitTrayIcon proc
     ; 填充 NOTIFYICONDATA 结构
     mov notifyData.cbSize, sizeof NOTIFYICONDATA
@@ -453,9 +563,9 @@ InitTrayIcon proc
 
 InitTrayIcon endp
 
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 ; 入口点
-; ════════════════════════════════════════════════════════════════
+; ════════════════════════════════════════════════════════════════════
 entry proc
     ; 如果已有实例运行，退出
     invoke FindWindow, ADDR className, 0
@@ -465,18 +575,7 @@ entry proc
     ret
 
     create_instance:
-    ; 初始化托盘
     invoke WinMain
-    ; 初始化托盘图标（在窗口创建后）
-    invoke InitTrayIcon
-
-    ; 注册全局热键 Ctrl+Shift+P
-    invoke RegisterHotKey, hWndMain, IDM_PROXY_TOGGLE, \
-        MOD_CONTROL or MOD_SHIFT, 'P'
-
-    ; 退出前清理
-    invoke UnregisterHotKey, hWndMain, IDM_PROXY_TOGGLE
-    invoke ExitProcess, msg.wParam
     ret
 
 entry endp
