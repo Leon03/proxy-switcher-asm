@@ -91,8 +91,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     // 初始化托盘
     InitTrayIcon();
 
-    // 注册全局热键 Ctrl+Shift+P
-    RegisterHotKey(g_hWnd, HOTKEY_ID, MOD_CONTROL | MOD_SHIFT, 'P');
+    // 注册全局热键 Ctrl+Alt+P
+    RegisterHotKey(g_hWnd, HOTKEY_ID, MOD_CONTROL | MOD_ALT, 'P');
 
     // 消息循环
     MSG msg;
@@ -282,7 +282,7 @@ void InitTrayIcon(void)
     // 菜单项
     AppendMenuW(g_hMenu, MF_STRING, IDM_PROXY_ON, L"代理开启");
     AppendMenuW(g_hMenu, MF_STRING, IDM_PROXY_OFF, L"代理关闭");
-    AppendMenuW(g_hMenu, MF_STRING, IDM_PROXY_TOGGLE, L"切换代理 (Ctrl+Shift+P)");
+    AppendMenuW(g_hMenu, MF_STRING, IDM_PROXY_TOGGLE, L"切换代理 (Ctrl+Alt+P)");
     AppendMenuW(g_hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenuW(g_hMenu, MF_STRING, IDM_AUTOSTART, L"开机启动");
     AppendMenuW(g_hMenu, MF_SEPARATOR, 0, NULL);
