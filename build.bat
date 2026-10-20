@@ -10,7 +10,7 @@ REM 创建输出目录
 if not exist build mkdir build
 
 REM 编汇编
-ml64 /c /Fo:build\main.obj main.asm
+ml64 /c /Fobuild\main.obj main.asm
 if errorlevel 1 (
     echo MASM compilation failed
     exit /b 1
