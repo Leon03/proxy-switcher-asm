@@ -1,0 +1,50 @@
+name: Build Proxy Switcher
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup MASM (Developer Command Prompt)
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build
+        shell: cmd
+        run: build.bat
+
+      - name: Verify output
+        shell: powershell
+        run: |
+          if (Test-Path build\ProxySwitcher.exe) {
+            $size = (Get-Item build\ProxySwitcher.exe).Length
+            Write-Host "Build OK: $size bytes"
+          } else {
+            Write-Error "ProxySwitcher.exe not found"
+            exit 1
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProxySwitcher-windows
+          path: build\ProxySwitcher.exe
+
+      - name: Create release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          files: build\ProxySwitcher.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
