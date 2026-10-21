@@ -170,15 +170,9 @@ void SetProxy(int enabled)
     LONG res = RegOpenKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, KEY_SET_VALUE, &hKey);
     if (res != ERROR_SUCCESS) return;
 
+    // 只切换 ProxyEnable 开关，不覆盖用户已有的 ProxyServer 地址
     DWORD val = enabled;
     RegSetValueExW(hKey, L"ProxyEnable", 0, REG_DWORD, (BYTE*)&val, sizeof(DWORD));
-
-    if (enabled) {
-        RegSetValueExW(hKey, L"ProxyServer", 0, REG_SZ,
-                       (BYTE*)DEFAULT_PROXY, (DWORD)((wcslen(DEFAULT_PROXY)+1)*sizeof(WCHAR)));
-        RegSetValueExW(hKey, L"ProxyOverride", 0, REG_SZ,
-                       (BYTE*)DEFAULT_BYPASS, (DWORD)((wcslen(DEFAULT_BYPASS)+1)*sizeof(WCHAR)));
-    }
     RegCloseKey(hKey);
 
     // 刷新
