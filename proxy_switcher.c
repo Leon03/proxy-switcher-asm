@@ -25,12 +25,10 @@
 
 #define WM_TRAYICON     (WM_USER + 4)
 #define IDI_APP         100
-#define IDM_PROXY_ON    2001
-#define IDM_PROXY_OFF   2002
-#define IDM_PROXY_TOGGLE 2003
+#define IDM_PROXY       2001
 #define IDM_AUTOSTART   2004
 #define IDM_EXIT        2005
-#define HOTKEY_ID       2003
+#define HOTKEY_ID       2001
 
 // ── 全局变量 ──
 HINSTANCE g_hInst = NULL;
@@ -149,9 +147,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     if (uMsg == WM_COMMAND) {
         WORD id = LOWORD(wParam);
         switch (id) {
-            case IDM_PROXY_ON:  SetProxy(1); break;
-            case IDM_PROXY_OFF: SetProxy(0); break;
-            case IDM_PROXY_TOGGLE: ToggleProxy(); break;
+            case IDM_PROXY:    ToggleProxy(); break;
             case IDM_AUTOSTART: ToggleAutoStart(); break;
             case IDM_EXIT: DestroyWindow(hWnd); break;
         }
@@ -207,8 +203,7 @@ void ToggleProxy(void)
 void UpdateMenuChecks(void)
 {
     int enabled = GetProxyEnabled();
-    CheckMenuItem(g_hMenu, IDM_PROXY_ON,  enabled ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(g_hMenu, IDM_PROXY_OFF, enabled ? MF_UNCHECKED : MF_CHECKED);
+    CheckMenuItem(g_hMenu, IDM_PROXY,    enabled ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(g_hMenu, IDM_AUTOSTART, IsAutoStartEnabled() ? MF_CHECKED : MF_UNCHECKED);
 }
 
@@ -274,9 +269,7 @@ void InitTrayIcon(void)
     Shell_NotifyIcon(NIM_ADD, &g_nid);
 
     // 菜单项
-    AppendMenuW(g_hMenu, MF_STRING, IDM_PROXY_ON, L"代理开启");
-    AppendMenuW(g_hMenu, MF_STRING, IDM_PROXY_OFF, L"代理关闭");
-    AppendMenuW(g_hMenu, MF_STRING, IDM_PROXY_TOGGLE, L"切换代理 (Ctrl+Alt+P)");
+    AppendMenuW(g_hMenu, MF_STRING, IDM_PROXY, L"开启代理 (Ctrl+Alt+P)");
     AppendMenuW(g_hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenuW(g_hMenu, MF_STRING, IDM_AUTOSTART, L"开机启动");
     AppendMenuW(g_hMenu, MF_SEPARATOR, 0, NULL);
