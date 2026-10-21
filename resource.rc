@@ -1,0 +1,4 @@
+// 资源文件 — 应用图标
+#include <windows.h>
+
+IDI_APP ICON "app.ico"
